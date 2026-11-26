@@ -1,0 +1,6 @@
+# serper.dev'den aldığın ücretsiz API anahtarı (sosyal medya ve web araması için)
+SERPER_KEY=serper-anahtarin
+# Siteyi kullanmak için belirleyeceğin şifre (başkaları arama kotanı harcayamasın)
+SITE_PASSWORD=bir-sifre-belirle
+# Yapay zekâ ile yeniden yazma ve teyit için isteğe bağlı. Sonradan Cloudflare panelinden de ekleyebilirsin.
+# ANTHROPIC_API_KEY=sk-ant-...
