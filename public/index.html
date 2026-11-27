@@ -54,6 +54,11 @@ button.sm{min-height:38px;padding:6px 12px;font-size:14px}
 .cb b{font-size:17px;line-height:1.2}
 .cb small{color:var(--mute);font-size:14px;line-height:1.35}
 .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.fnd{margin-bottom:10px;padding:10px 14px}
+.fl{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:10px}
+.fl>li{border-top:1px solid var(--line);padding-top:8px;overflow-wrap:anywhere}
+.fl small{display:block;color:var(--mute);font-size:13px}
+.fl ol{margin:6px 0 0;padding-left:20px;display:grid;gap:4px;font-size:14px}
 .chip.hit{background:var(--hl);color:var(--hlInk);border-color:transparent}
 .chip{font-size:12.5px;font-weight:600;border:1px solid var(--line);border-radius:99px;padding:1px 8px;color:var(--mute);white-space:nowrap}
 .strip{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px;margin:4px 0 14px}
@@ -126,7 +131,7 @@ a{color:var(--blue)}
       <div id="srvSt" class="hint hide" style="margin:0 0 12px;font-weight:600"></div>
       <div id="passRow" class="row hide"><div><label class="f" for="pw">Site şifresi</label><div style="display:flex;gap:8px"><input type="password" id="pw" autocomplete="current-password"><button id="pwB">Giriş</button></div><p class="hint err" id="pwE" style="margin:6px 0 0"></p></div></div>
       <details id="srvBox"><summary>Sosyal medya arama sunucusu</summary>
-        <div class="row" style="margin-top:8px"><div><label class="f" for="srv">Cloudflare Worker adresin</label><input type="text" id="srv" placeholder="https://ozgecmis-arama.KULLANICI.workers.dev" autocomplete="off" inputmode="url"><p class="hint" style="margin:6px 0 0">Bağlıysa Instagram, LinkedIn, X, TikTok, Facebook, YouTube ve Threads profilleri isim ve biyografiyle aranır, profil fotoğrafları gösterilir.</p></div></div>
+        <div class="row" style="margin-top:8px"><div><label class="f" for="srv">Cloudflare Worker adresin</label><input type="text" id="srv" placeholder="https://ozgecmis-arama.KULLANICI.workers.dev" autocomplete="off" inputmode="url"><p class="hint" style="margin:6px 0 0">Bağlıysa Instagram, LinkedIn, X, TikTok, Facebook, YouTube, Threads ve Reddit profilleri isim ve biyografiyle aranır, profil fotoğrafları gösterilir.</p></div></div>
       </details>
       <details id="aiBox"><summary>Yapay zekâ ile güçlendir (isteğe bağlı)</summary>
         <div class="row" style="margin-top:8px">
@@ -143,6 +148,8 @@ a{color:var(--blue)}
     <p class="hint" id="aiSt" style="color:var(--blue);font-weight:600"></p>
     <div id="photoWrap" class="hide"><div class="cat" style="margin-top:4px">Commons'ta bu isimle bulunan fotoğraflar</div><div class="strip" id="strip"></div></div>
     <label class="hint" style="display:flex;gap:8px;align-items:center;margin:0 0 10px"><input type="checkbox" id="onlyExact" checked style="width:22px;height:22px"> Sadece adı ve soyadı birebir eşleşenleri göster</label>
+    <div id="found"></div>
+    <div class="cat" style="margin-top:6px">Doğru kişiyi seç</div>
     <div class="cards" id="cards"></div>
   </section>
 
@@ -242,12 +249,33 @@ Yanıtı SADECE JSON olarak ver: {"kisiler":[{"ad":"...","aciklama":"...","platf
   return (j.kisiler||[]).slice(0,6).map((k,i)=>{const url=safeUrl(String(k.url||''));return {exact:nameMatch(String(k.ad||''),name),key:'ai:'+i+':'+url,soc:url?{platform:String(k.platform||'Web'),url,handle:''}:null,name:String(k.ad||name),desc:String(k.aciklama||'').slice(0,160),img:safeUrl(String(k.foto||''))||avatarFor(url),chips:['Web araması',String(k.platform||'')].filter(Boolean),score:-2-i/10,ai:true}});
 }
 
+/* ---------- Overview: accounts and publications in this name ---------- */
+async function loadWorks(run){
+  const au=S.cands.filter(c=>c.oa&&c.exact).slice(0,6);
+  await Promise.all(au.map(async c=>{try{const id=c.oa.id.split('/').pop();
+    const d=await J(`https://api.openalex.org/works?filter=author.id:${id}&sort=cited_by_count:desc&per-page=3&select=id,doi,display_name,publication_year,cited_by_count,primary_location`);
+    c.works=(d.results||[]).map(w=>({t:w.display_name,y:w.publication_year,n:w.cited_by_count,v:w.primary_location?.source?.display_name||'',u:safeUrl(w.doi)||safeUrl(w.id)}))}catch(e){c.works=[]}}));
+  if(run===S.sid&&S.step===2)renderFound();
+}
+function renderFound(){
+  const ex=S.cands.filter(c=>c.exact);
+  const soc=ex.filter(c=>c.soc),aca=ex.filter(c=>c.oa),enc=ex.filter(c=>c.wd);
+  const a=(u,t)=>`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`;
+  const block=(title,n,body)=>n?`<details class="panel fnd" open><summary>${esc(title)} (${n})</summary>${body}</details>`:'';
+  const insts=o=>[...new Set([...(o.last_known_institutions||[]).map(i=>i.display_name),...(o.affiliations||[]).map(f=>f.institution?.display_name)].filter(Boolean))].slice(0,4);
+  $('found').innerHTML=(soc.length||aca.length||enc.length)?`<div class="cat" style="margin-top:4px">Bu adla bulunanlar</div>`+
+    block('Sosyal medya hesapları',soc.length,`<ul class="fl">${soc.map(c=>`<li><b>${esc(c.soc.platform)}</b> ${a(c.soc.url,c.soc.handle||host(c.soc.url))}${c.desc?`<small>${esc(c.desc.slice(0,110))}</small>`:''}</li>`).join('')}</ul>`)+
+    block('Akademik kayıtlar',aca.length,`<ul class="fl">${aca.map(c=>{const o=c.oa,ins=insts(o);return `<li><b>${a(o.id,o.display_name)}</b> · ${o.works_count} yayın, ${o.cited_by_count} atıf${ins.length?`<small>Kurumlar: ${esc(ins.join(', '))}</small>`:''}${c.works?(c.works.length?`<ol>${c.works.map(w=>`<li>${a(w.u,w.t)} <small>${esc([w.y,w.v,w.n+' atıf'].filter(Boolean).join(' · '))}</small></li>`).join('')}</ol>`:''):'<small>Yayınlar yükleniyor…</small>'}</li>`}).join('')}</ul><p class="hint">Aynı adı taşıyan farklı akademisyenler ayrı satırlarda.</p>`)+
+    block('Ansiklopedi kayıtları',enc.length,`<ul class="fl">${enc.map(c=>`<li><b>${a('https://www.wikidata.org/wiki/'+c.wd.id,c.name)}</b>${c.desc?`<small>${esc(c.desc)}</small>`:''}</li>`).join('')}</ul>`)
+    :'';
+}
+
 /* ---------- Step 1 → 2: candidates ---------- */
 async function search(){
   const name=$('q').value.trim(),hint=$('h').value.trim();
   if(!name){$('q').focus();return}
   store.set('osh_key',key());store.set('osh_srv',srv());
-  S.name=name;S.sel.clear();S.cands=[];busy(true,'Adaylar aranıyor…');
+  S.name=name;S.sel.clear();S.cands=[];S.sid=(S.sid||0)+1;busy(true,'Adaylar aranıyor…');
   const qids=new Set();let socs=[],srvs=[];S.raw.srvWeb=[];S.raw.srvPhotos=[];S.srvErr='';
   const jobs=[
     socialCands(name).then(x=>socs=x),
@@ -276,6 +304,7 @@ async function search(){
   if(hint){const h=hint.toLocaleLowerCase('tr');socs.forEach(c=>{if((c.desc+' '+c.name).toLocaleLowerCase('tr').includes(h))c.score+=100})}
   S.cands.sort((a,b)=>b.score-a.score);
   busy(false);go(2);
+  loadWorks(S.sid);
   if(key()&&$('aiWeb').checked){
     const run=++S.aiRun;S.aiBusy=true;renderCands();
     try{const ac=await aiCands(name,hint);if(run===S.aiRun){const urls=new Set(S.cands.map(c=>c.soc?.url).filter(Boolean));S.cands.push(...ac.filter(c=>!c.soc||!urls.has(c.soc.url)))}}catch(e){S.aiErr=true}
@@ -284,6 +313,7 @@ async function search(){
 }
 function renderCands(){
   const ph=S.raw.photos||[];
+  renderFound();
   $('aiSt').textContent=(S.srvErr&&S.cands.length?`Arama sunucusuna ulaşılamadı: ${S.srvErr}. `:'')+(S.aiBusy?'Yapay zekâ internette ve sosyal medyada başka adaylar arıyor, kartlar birazdan eklenecek…':'');
   $('photoWrap').classList.toggle('hide',!ph.length);
   $('strip').innerHTML=ph.map(i=>`<img src="${esc(safeUrl(i.thumburl||i.url))}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join('');

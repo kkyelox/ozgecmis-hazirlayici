@@ -12,7 +12,7 @@
 const PLATFORMS = [
   ['instagram.com', 'Instagram'], ['linkedin.com', 'LinkedIn'], ['x.com', 'X (Twitter)'], ['twitter.com', 'X (Twitter)'],
   ['tiktok.com', 'TikTok'], ['facebook.com', 'Facebook'], ['youtube.com', 'YouTube'], ['threads.net', 'Threads'],
-  ['github.com', 'GitHub'], ['medium.com', 'Medium'], ['behance.net', 'Behance'], ['vimeo.com', 'Vimeo'], ['bsky.app', 'Bluesky'],
+  ['github.com', 'GitHub'], ['reddit.com', 'Reddit'], ['medium.com', 'Medium'], ['behance.net', 'Behance'], ['vimeo.com', 'Vimeo'], ['bsky.app', 'Bluesky'],
 ];
 const NOT_PROFILE = /^(p|reel|reels|tv|explore|stories|status|hashtag|search|watch|shorts|video|posts|pulse|company|groups|events|photo|photos|share|tags|i|intent)$/i;
 
@@ -33,8 +33,9 @@ function profileOf(link) {
   else if (p[0] === 'tiktok.com') handle = seg[0]?.startsWith('@') ? seg[0] : '';
   else if (p[0] === 'bsky.app') handle = seg[0] === 'profile' ? seg[1] : '';
   else if (p[0] === 'facebook.com' && seg[0] === 'people') handle = seg[1];
+  else if (p[0] === 'reddit.com') handle = (seg[0] === 'user' || seg[0] === 'u') ? seg[1] : '';
   else handle = seg[0] && !NOT_PROFILE.test(seg[0]) ? seg[0] : '';
-  const isProfile = !!handle && seg.length <= (p[0] === 'linkedin.com' || p[0] === 'bsky.app' ? 2 : 1);
+  const isProfile = !!handle && seg.length <= (p[0] === 'linkedin.com' || p[0] === 'bsky.app' || p[0] === 'reddit.com' ? 2 : 1);
   return { platform: p[1], host: p[0], handle: (handle || '').replace(/^@/, ''), isProfile };
 }
 
@@ -107,7 +108,7 @@ async function search(url, env, H) {
     const hint = (url.searchParams.get('hint') || '').trim().slice(0, 80);
     if (words(name).length < 2) return new Response('{"error":"ad ve soyad gerekli"}', { status: 400, headers: H });
 
-    const sites = ['instagram.com', 'linkedin.com/in', 'x.com', 'twitter.com', 'tiktok.com', 'facebook.com', 'youtube.com', 'threads.net'].map(s => 'site:' + s).join(' OR ');
+    const sites = ['instagram.com', 'linkedin.com/in', 'x.com', 'twitter.com', 'tiktok.com', 'facebook.com', 'youtube.com', 'threads.net', 'reddit.com/user'].map(s => 'site:' + s).join(' OR ');
     const qs = [
       ['search', `"${name}" ${hint} (${sites})`],
       ['search', `"${name}" ${hint}`],
@@ -132,7 +133,7 @@ async function search(url, env, H) {
         if (p.isProfile) { cur.url = o.link; cur.title = o.title || cur.title; cur.bio = o.snippet || cur.bio; }
         else cur.posts.push({ url: o.link, text: (o.snippet || o.title || '').slice(0, 200) });
         cur.exact = cur.exact || ex; cur.hint = [...new Set([...cur.hint, ...hits])];
-        if (!cur.url) cur.url = `https://${p.host}/${p.host === 'linkedin.com' ? 'in/' : ''}${p.host === 'tiktok.com' ? '@' : ''}${p.handle}`;
+        if (!cur.url) cur.url = `https://${p.host}/${p.host === 'linkedin.com' ? 'in/' : p.host === 'reddit.com' ? 'user/' : ''}${p.host === 'tiktok.com' ? '@' : ''}${p.handle}`;
         profiles.set(key, cur);
       } else if (!p) {
         pages.push({ url: o.link, title: o.title || '', snippet: o.snippet || '', exact: ex, hint: hits });
